@@ -1,3 +1,12 @@
+import logging
+import os
+import time
+import fasttext as ft
+from skopt.utils import use_named_args
+from skopt.space import Real, Integer
+from skopt import gp_minimize
+from UshurLanguageEngine.linode.classifiers.fast_text import FastTextClassifier
+from UshurLanguageEngine.linode.data import TextData
 import pwd
 import numpy as np
 from sklearn.metrics import accuracy_score
@@ -7,7 +16,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.metrics import accuracy_score
 from sklearn.model_selection import train_test_split
-import os 
+import os
 import sys
 import pandas as pd
 from sklearn.preprocessing import LabelEncoder
@@ -17,20 +26,11 @@ sklearn.utils.fixes.MaskedArray = MaskedArray
 
 # sys.path.append('/Users/jayasuryaagovindraj/Documents/Ushur_Internship/Coding/Continual-Learning-FastText/UshurLanguageEngine')
 
-from UshurLanguageEngine.linode.data import TextData
-from UshurLanguageEngine.linode.classifiers.fast_text import FastTextClassifier
 
-from skopt import gp_minimize
-from skopt.space import Real, Integer
-from skopt.utils import use_named_args
-
-import fasttext as ft
-import time
-import os
-import logging
 logger = logging.getLogger(__name__)
 
 print('Hello!')
+
 
 class ft_new(FastTextClassifier):
     def __init__(
@@ -61,20 +61,21 @@ class ft_new(FastTextClassifier):
             self.init_autotune_param(
                 epoch_range, lr_range, wordNgrams_range, search_iter
             )
-    
+
     def write_ft_format_file(self, topics, texts):
         train_file = self._create_tmp_train_fname()
 
         with open(train_file, "w") as f:
             for topic, text in zip(topics, texts):
                 if self.multilabel:
-                    prefix = ' '.join([f"__{self.label_prefix}__{el}" for el in topic.split(self.topic_sep)])
+                    prefix = ' '.join(
+                        [f"__{self.label_prefix}__{el}" for el in topic.split(self.topic_sep)])
                     f.write(f"{prefix} {text}\n")
                 else:
                     f.write(f"__{self.label_prefix}__{topic} {text}\n")
 
         return train_file
-    
+
     def train(
         self, data, epoch=50, lr=0.1, thread=1, wordNgrams=1, **kwargs,
     ):
@@ -123,7 +124,8 @@ class ft_new(FastTextClassifier):
 
             args["loss"] = "ova" if self.multilabel else self.loss_fn
 
-            model = ft.train_supervised(input=self.train_split_file, **args, **kwargs)
+            model = ft.train_supervised(
+                input=self.train_split_file, **args, **kwargs)
 
             val_result = model.test(self.val_split_file)
 
@@ -157,10 +159,10 @@ class ft_new(FastTextClassifier):
 ft_clf = ft_new(
     multilabel=False,
     param_search=False,
-    epoch = 117,
-    lr = 0.4,
+    epoch=117,
+    lr=0.4,
     thread=8,
-    wordNgrams = 2,
+    wordNgrams=2,
     loss_fn='softmax'
 )
 
@@ -168,11 +170,12 @@ data = pd.read_csv("askunum__820k_preprocessed.csv")
 data = data.sample(frac=1)
 print(data.topic.value_counts())
 
-labels = ['Employee Coding', 'Enrollment Submission', 'Add, Remove, or Update user access', 'Enrollment Status']
+labels = ['Employee Coding', 'Enrollment Submission',
+          'Add, Remove, or Update user access', 'Enrollment Status']
 data = data[data['topic'].isin(labels)]
 
 data = data[data['topic'].isin(labels)]
-train_dataset, test_dataset = train_test_split(data, test_size = 0.5)
+train_dataset, test_dataset = train_test_split(data, test_size=0.5)
 print(len(train_dataset), len(test_dataset))
 
 trainX = train_dataset.iloc[:30000, 1]
@@ -181,8 +184,8 @@ trainY = train_dataset.iloc[:30000, 0].values
 testX = test_dataset.iloc[:30000, 1]
 testY = test_dataset.iloc[:30000, 0].values
 
-trainX = trainX.to_numpy(dtype = 'U')
-testX = testX.to_numpy(dtype = 'U')
+trainX = trainX.to_numpy(dtype='U')
+testX = testX.to_numpy(dtype='U')
 
 print(trainX.shape, testX.shape)
 
@@ -190,157 +193,191 @@ encoder = LabelEncoder()
 trainY = encoder.fit_transform(trainY)
 testY = encoder.transform(testY)
 
-print(np.unique(trainY, return_counts= True), np.unique(testY, return_counts= True))
+print(np.unique(trainY, return_counts=True),
+      np.unique(testY, return_counts=True))
 
-testX, validationX, testY, validationY = train_test_split(testX, testY, test_size = 1000)
+testX, validationX, testY, validationY = train_test_split(
+    testX, testY, test_size=1000)
 
 ft_clf = ft_new(
     multilabel=False,
     param_search=False,
-    epoch = 117,
-    lr = 0.4,
+    epoch=117,
+    lr=0.4,
     thread=8,
-    wordNgrams = 2,
+    wordNgrams=2,
     loss_fn='softmax'
 )
 
-test_data = TextData(texts = testX,topics = testY)
-train_data = TextData(texts = trainX,topics = trainY)
+test_data = TextData(texts=testX, topics=testY)
+train_data = TextData(texts=trainX, topics=trainY)
 
-ft_clf.train(train_data,epoch=100, lr=0.25, wordNgrams=2)
+ft_clf.train(train_data, epoch=100, lr=0.25, wordNgrams=2)
 pred = ft_clf.predict(test_data)
 pred.preds = pred.preds.astype('int64')
 print(accuracy_score(pred.preds, testY))
 
-def capture_wrong_predictions(predictions, truth):  
-  wrong_indices = [i for i in range(len(predictions)) if predictions[i] != truth[i]]
-  return wrong_indices
 
-class ModelWithFeedback: 
+def capture_wrong_predictions(predictions, truth):
+    wrong_indices = [i for i in range(
+        len(predictions)) if predictions[i] != truth[i]]
+    return wrong_indices
 
-  def __init__(self, model):
-      self.model = model
-      self.buffer = [[], []]
-      # self.partialModel = keras.Model(inputs = self.model.inputs, outputs = self.model.layers[-2].output)
-      self.tfidfEncoder = TfidfVectorizer(min_df=1, stop_words="english")
 
-  def tfidf_encoder_fit(self, train_texts):
-    self.tfidfEncoder.fit(train_texts)
+class ModelWithFeedback:
 
-  def predictV2(self, testX, threshold = 0.9, verbose = False, debug = False):
-    encoded_text = self.tfidfEncoder.transform(testX)
-    similarities = cosine_similarity(encoded_text, self.buffer[0])
+    def __init__(self, model):
+        self.model = model
+        self.buffer = [[], []]
+        # self.partialModel = keras.Model(inputs = self.model.inputs, outputs = self.model.layers[-2].output)
+        self.tfidfEncoder = TfidfVectorizer(min_df=1, stop_words="english")
+
+    def tfidf_encoder_fit(self, train_texts):
+        self.tfidfEncoder.fit(train_texts)
+
+    def predictV2(self, testX, threshold=0.9, verbose=False, debug=False):
+        encoded_text = self.tfidfEncoder.transform(testX)
+        similarities = cosine_similarity(encoded_text, self.buffer[0])
+
+        if debug:
+            return similarities
+
+        if similarities.max() > threshold:
+            if verbose:
+                print("Using the feedback buffer")
+                print(f"Value is at {similarities.argmax()}")
+                # print(feedbackModel.buffer[1].shape)
+                # print(feedbackModel.buffer[1][similarities.argmax()])
+                # print(feedbackModel.buffer[1][similarities.argmax()].shape)
+            return np.array([self.buffer[1][similarities.argmax()]]), True
+
+        else:
+            if verbose:
+                print("Using the pure model")
+            # testX_encoded = self.encode_texts(testX)
+            # testX_encoded = np.pad(testX_encoded, ((0,0), (0, trainX_encoded.shape[1] - testX_encoded.shape[1])), mode = 'constant')
+            test_data = TextData(texts=testX, topics=testY)
+            predictions = self.model.predict(test_data)
+            return np.array([predictions.preds.astype('int64')]), False
+            # return np.array(self.model.predict(testX)), False
+
+    def predict(self, testX, threshold=0.9, verbose=False, debug=False):
+        partialOutput = self.partialModel.predict(testX)
+        # print(partialOutput.shape)
+        np_buffer = np.array(self.buffer[0])
+        np_buffer = np_buffer.reshape((np_buffer.shape[0], np_buffer.shape[2]))
+
+        similarity = cosine_similarity(partialOutput, np_buffer)
+
+        if debug:
+            print(similarity.shape)
+            return np.array(self.model.predict(testX)), np.array([self.buffer[1][similarity.argmax()]])
+
+        if similarity.max() > threshold:
+            if verbose:
+                print("Using the feedback buffer")
+                print(f"Value is at {similarity.argmax()}")
+            # print(f"Feedback buffer shape: {(self.buffer[1][similarity.argmax()]).shape}")
+            # print(f"Pure model shape: {(np.array([self.model.predict(testX).argmax()])).shape}")
+            return np.array([self.buffer[1][similarity.argmax()]]), True
+
+        else:
+            if verbose:
+                print("Using the pure model")
+            # print((np.array([self.model.predict(testX).argmax()])).shape)
+            return np.array(self.model.predict(testX)), False
+
+# Fix
+
+
+def evaluate_predictionsV2(testX, testY, feedbackModel: ModelWithFeedback, test_indices, threshold=0.9, verbose=False, debug=False):
+    """Function to evaluate the predictions made by the model with the true class labels.
+
+    Args:
+        testX (Numpy Array): Numpy array containing the input texts to be fed to the model.
+        testY (Numpy Array): Numpy array containing the corresponding classes of the texts.
+        feedbackModel (ModelWithFeedback): The feedback model used to make the prediction.
+        test_indices (list): A list containing the indices of the dataset to send to the model.
+        threshold (float): The threshold which decides whether the prediction is made using the baseline model or the feedback buffer. Defaults to 0.9.
+        verbose (bool, optional): Provide more information about the running of the model. Defaults to False.
+        debug (bool, optional): Used for debugging purposes. Code written in the debug module will run. Defaults to False.
+
+    Returns:
+        tuple: Returns the accuracy score and the number of samples correctly classified.
+    """
     
-    if debug:
-      return similarities
+    feedback_predictions = []
+    actual_output = []
+    feedbackCount = 0
 
-    if similarities.max() > threshold:
-      if verbose:
-        print("Using the feedback buffer")
-        print(f"Value is at {similarities.argmax()}")
-        # print(feedbackModel.buffer[1].shape)
-        # print(feedbackModel.buffer[1][similarities.argmax()])
-        # print(feedbackModel.buffer[1][similarities.argmax()].shape)
-      return np.array([self.buffer[1][similarities.argmax()]]), True
-    
-    else:
-      if verbose:
-        print("Using the pure model")
-      # testX_encoded = self.encode_texts(testX)
-      # testX_encoded = np.pad(testX_encoded, ((0,0), (0, trainX_encoded.shape[1] - testX_encoded.shape[1])), mode = 'constant')
-      test_data = TextData(texts = testX,topics = testY)
-      predictions = self.model.predict(test_data)
-      return np.array([predictions.preds.astype('int64')]), False
-      # return np.array(self.model.predict(testX)), False
+    feedbackCorrect = 0
+    pureModelCorrect = 0
 
-  def predict(self, testX, threshold = 0.9, verbose = False, debug = False):
-    partialOutput = self.partialModel.predict(testX)
-    # print(partialOutput.shape)
-    np_buffer = np.array(self.buffer[0])
-    np_buffer = np_buffer.reshape((np_buffer.shape[0], np_buffer.shape[2]))
+    pure_indices = []
 
-    similarity = cosine_similarity(partialOutput, np_buffer)
+    for i in range(len(test_indices)):
+        x_test = np.array([testX[test_indices[i]]])
+        y_test = np.array([testY[test_indices[i]]])
 
-    if debug:
-      print(similarity.shape)
-      return np.array(self.model.predict(testX)), np.array([self.buffer[1][similarity.argmax()]])
+        if debug:
+            pass
+            # x_test_encoded = feedbackModel.encode_texts(x_test)
+            # if model.predict(x_test_encoded) == y_test:
+            #   print(f'Error at {test_indices[i]}')
+            break
 
-    if similarity.max() > threshold:
-      if verbose:
-        print("Using the feedback buffer")
-        print(f"Value is at {similarity.argmax()}")
-      # print(f"Feedback buffer shape: {(self.buffer[1][similarity.argmax()]).shape}")
-      # print(f"Pure model shape: {(np.array([self.model.predict(testX).argmax()])).shape}")
-      return np.array([self.buffer[1][similarity.argmax()]]), True
-    
-    else:
-      if verbose:
-        print("Using the pure model")
-      # print((np.array([self.model.predict(testX).argmax()])).shape)
-      return np.array(self.model.predict(testX)), False
+        output, feedbackUsed = feedbackModel.predictV2(
+            x_test, threshold, verbose)
+        # output_bool = output
+        feedback_predictions.append(output)
+        actual_output.append(y_test)
 
-#Fix
-def evaluate_predictionsV2(testX, testY, feedbackModel: ModelWithFeedback, test_indices, threshold = 0.9, verbose = False, debug = False):
-  feedback_predictions = []
-  actual_output = []
-  feedbackCount = 0
+        # if debug:
+        #   x_test_encoded = feedbackModel.encode_texts(x_test)
+        #   if model.predict(x_test_encoded) == y_test:
+        #     print(f'Error at {test_indices[i]}')
+        #     break
 
-  feedbackCorrect = 0
-  pureModelCorrect = 0
+        # if debug and not feedbackUsed:
+        #   print(output_bool, y_test)
+        #   if output_bool == y_test:
+        #     print('yes')
+        #   else:
+        #     print('no')
 
-  pure_indices = []
+        if feedbackUsed:
+            feedbackCount += 1
 
-  for i in range(len(test_indices)):
-    x_test = np.array([testX[test_indices[i]]])
-    y_test = np.array([testY[test_indices[i]]])
+        # print(output, y_test)
+        if output == y_test:
+            # print('yes')
+            if feedbackUsed:
+                feedbackCorrect += 1
+            else:
+                pureModelCorrect += 1
 
-    if debug:
-      pass
-      # x_test_encoded = feedbackModel.encode_texts(x_test)
-      # if model.predict(x_test_encoded) == y_test:
-      #   print(f'Error at {test_indices[i]}')
-      break
-        
-    output, feedbackUsed = feedbackModel.predictV2(x_test, threshold, verbose)
-    # output_bool = output
-    feedback_predictions.append(output)
-    actual_output.append(y_test)
+        if debug:
+            return feedback_predictions, actual_output
 
-    # if debug:
-    #   x_test_encoded = feedbackModel.encode_texts(x_test)
-    #   if model.predict(x_test_encoded) == y_test:
-    #     print(f'Error at {test_indices[i]}')
-    #     break
+    feedback_predictions = np.array(feedback_predictions).flatten()
+    actual_output = np.array(actual_output).flatten()
 
-    # if debug and not feedbackUsed:
-    #   print(output_bool, y_test)
-    #   if output_bool == y_test:
-    #     print('yes')
-    #   else:
-    #     print('no')
+    print(f"The feedback buffer predicted {feedbackCorrect} samples correctly")
+    print(f"The pure model predicted {pureModelCorrect} samples correctly")
 
-    if feedbackUsed:
-        feedbackCount += 1
-
-    # print(output, y_test)
-    if output == y_test: 
-      # print('yes')
-      if feedbackUsed: feedbackCorrect += 1
-      else: pureModelCorrect += 1
+    print(f"The feedback buffer was used {feedbackCount} times")
+    print(f"The pure model was used {len(test_indices) - feedbackCount} times")
 
     if debug:
-      return feedback_predictions, actual_output
+        return pure_indices
 
-  feedback_predictions = np.array(feedback_predictions).flatten()
-  actual_output = np.array(actual_output).flatten()
+    return accuracy_score(feedback_predictions, actual_output), accuracy_score(feedback_predictions, actual_output, normalize=False)
 
-  print(f"The feedback buffer predicted {feedbackCorrect} samples correctly")
-  print(f"The pure model predicted {pureModelCorrect} samples correctly")
 
-  print(f"The feedback buffer was used {feedbackCount} times")
-  print(f"The pure model was used {len(test_indices) - feedbackCount} times")
-
-  if debug:
-    return pure_indices
-
-  return accuracy_score(feedback_predictions, actual_output), accuracy_score(feedback_predictions, actual_output, normalize = False)
+def load_bufferV2(indices, feedbackModel: ModelWithFeedback, testX, testY):
+    wrongX = testX[indices]
+    wrongY = testY[indices]
+    wrongY = wrongY.reshape((wrongY.shape[0], 1))
+    encoded_texts = feedbackModel.tfidfEncoder.transform(wrongX)
+    feedbackModel.buffer[0] = encoded_texts.toarray()
+    feedbackModel.buffer[1] = wrongY
