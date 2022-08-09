@@ -279,3 +279,68 @@ class ModelWithFeedback:
       # print((np.array([self.model.predict(testX).argmax()])).shape)
       return np.array(self.model.predict(testX)), False
 
+#Fix
+def evaluate_predictionsV2(testX, testY, feedbackModel: ModelWithFeedback, test_indices, threshold = 0.9, verbose = False, debug = False):
+  feedback_predictions = []
+  actual_output = []
+  feedbackCount = 0
+
+  feedbackCorrect = 0
+  pureModelCorrect = 0
+
+  pure_indices = []
+
+  for i in range(len(test_indices)):
+    x_test = np.array([testX[test_indices[i]]])
+    y_test = np.array([testY[test_indices[i]]])
+
+    if debug:
+      pass
+      # x_test_encoded = feedbackModel.encode_texts(x_test)
+      # if model.predict(x_test_encoded) == y_test:
+      #   print(f'Error at {test_indices[i]}')
+      break
+        
+    output, feedbackUsed = feedbackModel.predictV2(x_test, threshold, verbose)
+    # output_bool = output
+    feedback_predictions.append(output)
+    actual_output.append(y_test)
+
+    # if debug:
+    #   x_test_encoded = feedbackModel.encode_texts(x_test)
+    #   if model.predict(x_test_encoded) == y_test:
+    #     print(f'Error at {test_indices[i]}')
+    #     break
+
+    # if debug and not feedbackUsed:
+    #   print(output_bool, y_test)
+    #   if output_bool == y_test:
+    #     print('yes')
+    #   else:
+    #     print('no')
+
+    if feedbackUsed:
+        feedbackCount += 1
+
+    # print(output, y_test)
+    if output == y_test: 
+      # print('yes')
+      if feedbackUsed: feedbackCorrect += 1
+      else: pureModelCorrect += 1
+
+    if debug:
+      return feedback_predictions, actual_output
+
+  feedback_predictions = np.array(feedback_predictions).flatten()
+  actual_output = np.array(actual_output).flatten()
+
+  print(f"The feedback buffer predicted {feedbackCorrect} samples correctly")
+  print(f"The pure model predicted {pureModelCorrect} samples correctly")
+
+  print(f"The feedback buffer was used {feedbackCount} times")
+  print(f"The pure model was used {len(test_indices) - feedbackCount} times")
+
+  if debug:
+    return pure_indices
+
+  return accuracy_score(feedback_predictions, actual_output), accuracy_score(feedback_predictions, actual_output, normalize = False)
