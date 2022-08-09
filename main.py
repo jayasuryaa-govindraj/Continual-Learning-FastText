@@ -305,7 +305,7 @@ def evaluate_predictionsV2(testX, testY, feedbackModel: ModelWithFeedback, test_
     Returns:
         tuple: Returns the accuracy score and the number of samples correctly classified.
     """
-    
+
     feedback_predictions = []
     actual_output = []
     feedbackCount = 0
@@ -375,9 +375,21 @@ def evaluate_predictionsV2(testX, testY, feedbackModel: ModelWithFeedback, test_
 
 
 def load_bufferV2(indices, feedbackModel: ModelWithFeedback, testX, testY):
+   
+    """Function to load the feedback buffer with the misclassified texts along with their corresponding classes.
+
+    Args:
+        indices (list): A list containing the indices wherein the misclassified samples are in the dataset.
+        feedbackModel (ModelWithFeedback): The feedback model containing the buffer to which samples will be added to.
+        testX (Numpy Array): Numpy array containing the misclassified texts to be fed to the feedback buffer.
+        testY (Numpy Array): Numpy array containing the corresponding classes of the texts.
+    """
+
     wrongX = testX[indices]
     wrongY = testY[indices]
     wrongY = wrongY.reshape((wrongY.shape[0], 1))
     encoded_texts = feedbackModel.tfidfEncoder.transform(wrongX)
     feedbackModel.buffer[0] = encoded_texts.toarray()
     feedbackModel.buffer[1] = wrongY
+
+    return
