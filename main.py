@@ -212,8 +212,70 @@ pred = ft_clf.predict(test_data)
 pred.preds = pred.preds.astype('int64')
 print(accuracy_score(pred.preds, testY))
 
-def capture_wrong_predictions(predictions, truth):
-  # for i in range(len(testX)):
-  
+def capture_wrong_predictions(predictions, truth):  
   wrong_indices = [i for i in range(len(predictions)) if predictions[i] != truth[i]]
   return wrong_indices
+
+class ModelWithFeedback: 
+
+  def __init__(self, model):
+      self.model = model
+      self.buffer = [[], []]
+      # self.partialModel = keras.Model(inputs = self.model.inputs, outputs = self.model.layers[-2].output)
+      self.tfidfEncoder = TfidfVectorizer(min_df=1, stop_words="english")
+
+  def tfidf_encoder_fit(self, train_texts):
+    self.tfidfEncoder.fit(train_texts)
+
+  def predictV2(self, testX, threshold = 0.9, verbose = False, debug = False):
+    encoded_text = self.tfidfEncoder.transform(testX)
+    similarities = cosine_similarity(encoded_text, self.buffer[0])
+    
+    if debug:
+      return similarities
+
+    if similarities.max() > threshold:
+      if verbose:
+        print("Using the feedback buffer")
+        print(f"Value is at {similarities.argmax()}")
+        # print(feedbackModel.buffer[1].shape)
+        # print(feedbackModel.buffer[1][similarities.argmax()])
+        # print(feedbackModel.buffer[1][similarities.argmax()].shape)
+      return np.array([self.buffer[1][similarities.argmax()]]), True
+    
+    else:
+      if verbose:
+        print("Using the pure model")
+      # testX_encoded = self.encode_texts(testX)
+      # testX_encoded = np.pad(testX_encoded, ((0,0), (0, trainX_encoded.shape[1] - testX_encoded.shape[1])), mode = 'constant')
+      test_data = TextData(texts = testX,topics = testY)
+      predictions = self.model.predict(test_data)
+      return np.array([predictions.preds.astype('int64')]), False
+      # return np.array(self.model.predict(testX)), False
+
+  def predict(self, testX, threshold = 0.9, verbose = False, debug = False):
+    partialOutput = self.partialModel.predict(testX)
+    # print(partialOutput.shape)
+    np_buffer = np.array(self.buffer[0])
+    np_buffer = np_buffer.reshape((np_buffer.shape[0], np_buffer.shape[2]))
+
+    similarity = cosine_similarity(partialOutput, np_buffer)
+
+    if debug:
+      print(similarity.shape)
+      return np.array(self.model.predict(testX)), np.array([self.buffer[1][similarity.argmax()]])
+
+    if similarity.max() > threshold:
+      if verbose:
+        print("Using the feedback buffer")
+        print(f"Value is at {similarity.argmax()}")
+      # print(f"Feedback buffer shape: {(self.buffer[1][similarity.argmax()]).shape}")
+      # print(f"Pure model shape: {(np.array([self.model.predict(testX).argmax()])).shape}")
+      return np.array([self.buffer[1][similarity.argmax()]]), True
+    
+    else:
+      if verbose:
+        print("Using the pure model")
+      # print((np.array([self.model.predict(testX).argmax()])).shape)
+      return np.array(self.model.predict(testX)), False
+
