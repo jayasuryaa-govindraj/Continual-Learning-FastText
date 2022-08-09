@@ -375,8 +375,7 @@ def evaluate_predictionsV2(testX, testY, feedbackModel: ModelWithFeedback, test_
 
 
 def load_bufferV2(indices, feedbackModel: ModelWithFeedback, testX, testY):
-   
-    """Function to load the feedback buffer with the misclassified texts along with their corresponding classes.
+    """Function to load the feedback buffer with the misclassified texts along with their corresponding classes. The TF-IDF representations of the texts are stored in the buffer.
 
     Args:
         indices (list): A list containing the indices wherein the misclassified samples are in the dataset.
@@ -393,3 +392,59 @@ def load_bufferV2(indices, feedbackModel: ModelWithFeedback, testX, testY):
     feedbackModel.buffer[1] = wrongY
 
     return
+
+
+def get_random_indices(wrong_indices, sample_size) -> tuple:
+    """Function to grab random indices from a list given a sample size
+
+    Args:
+        wrong_indices (list): list containing the indices to sample from.
+        sample_size (int): sample size to sample the original list from.
+
+    Returns:
+        tuple: Returns two lists- one subsampled list, and the other is the remainder.
+    """
+    buffer_indices = random.sample(wrong_indices, sample_size)
+    test_indices = list(set(wrong_indices) ^ set(buffer_indices))
+    return buffer_indices, test_indices
+
+
+# Instantiate the feedback model
+feedbackModel = ModelWithFeedback(ft_clf)
+
+wrong_indices = capture_wrong_predictions(pred.preds, testY)
+buffer_indices, test_indices = get_random_indices(wrong_indices, 800)
+feedbackModel.tfidf_encoder_fit(trainX)
+
+#Loading the misclassified samples into the buffer
+load_bufferV2(buffer_indices, feedbackModel, testX, testY)
+print(len(feedbackModel.buffer[0]))
+print(len(wrong_indices), len(test_indices))
+
+new_testX = np.concatenate((validationX, testX[test_indices]))
+new_testY = np.concatenate((validationY, testY[test_indices]))
+
+#Generating indices for the new test set
+new_test_indices = [i for i in range(0, len(new_testY))]
+print(len(new_test_indices))
+
+evaluate_predictionsV2(testX, testY, test_indices[:3000], threshold = 0.9)
+
+#Grabbing random samples from the test data
+new_test_indices = [i for i in range(0, len(testY))]
+new_test_indices, _ = get_random_indices(new_test_indices, 2000)
+
+evaluate_predictionsV2(testX, testY, new_test_indices, threshold = 0.9)
+
+#Creating a numpy array to check the performance of the baseline model with the new test data
+pureX = testX[new_test_indices]
+pureY = testY[new_test_indices]
+
+pure_data = TextData(texts = pureX,topics = pureY)
+pure_pred = feedbackModel.model.predict(pure_data)
+pure_pred.preds = pure_pred.preds.astype('int64')
+print(accuracy_score(pure_pred.preds, pureY))
+
+#Creating indices for the validation dataset
+new_test_indices = [i for i in range(0, len(validationY))]
+evaluate_predictionsV2(validationX, validationY, new_test_indices, threshold = 0.9)
