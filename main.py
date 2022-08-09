@@ -5,8 +5,6 @@ import fasttext as ft
 from skopt.utils import use_named_args
 from skopt.space import Real, Integer
 from skopt import gp_minimize
-from UshurLanguageEngine.linode.classifiers.fast_text import FastTextClassifier
-from UshurLanguageEngine.linode.data import TextData
 import pwd
 import numpy as np
 from sklearn.metrics import accuracy_score
@@ -18,14 +16,17 @@ from sklearn.metrics import accuracy_score
 from sklearn.model_selection import train_test_split
 import os
 import sys
+
+sys.path.append('/Users/jayasuryaagovindraj/Documents/Ushur_Internship/Coding/Continual-Learning-FastText/UshurLanguageEngine')
+
 import pandas as pd
 from sklearn.preprocessing import LabelEncoder
 from numpy.ma import MaskedArray
 import sklearn.utils.fixes
 sklearn.utils.fixes.MaskedArray = MaskedArray
 
-# sys.path.append('/Users/jayasuryaagovindraj/Documents/Ushur_Internship/Coding/Continual-Learning-FastText/UshurLanguageEngine')
-
+from UshurLanguageEngine.linode.classifiers.fast_text import FastTextClassifier
+from UshurLanguageEngine.linode.data import TextData
 
 logger = logging.getLogger(__name__)
 
